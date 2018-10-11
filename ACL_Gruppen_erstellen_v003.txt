@@ -1,0 +1,77 @@
+#=========================================================================
+# Filename:    ACL_Gruppen_erstellen_v003.ps1  
+# Description: Anlegen der Gruppen und Verzeichnisse
+# Created on:  16.12.2015
+# Created by:  Marvin Thamm
+# ========================================================================
+
+set-executionpolicy unrestricted 
+import-module act* 
+
+#==================================================================================================================================================
+# Wichtige Variablen die hier angepasst werden können
+#==================================================================================================================================================
+
+$Domain = "office.asysbs.services"
+$DomainDN = "DC=office,DC=asysbs,DC=services"
+$Groups = Import-Csv C:\Tools\Scripts\02_Create_Groups\neue_gruppen.csv -Delimiter ";" 
+
+#==================================================================================================================================================
+# Einlesen der Werte aus der CSV-Datei
+#==================================================================================================================================================
+
+ForEach($Group in $Groups) { 
+
+    $Gruppenname = $Group.Gruppenname
+    $Gruppenname_M = "ACL_Team_" + $Gruppenname + "_M"
+    $Gruppenname_R = "ACL_Team_" + $Gruppenname + "_R"
+    $Gruppenname_ROLE = "ROLE_Team_" + $Gruppenname
+    $Folderpath = "\\C00L00SR0201\d$\Team\" + $Group.Pfad
+
+#==================================================================================================================================================
+# Erstellen der Variablen
+#==================================================================================================================================================
+
+
+$RoleBeschreibung = "Verzeichnis Team_" + $Gruppenname
+$RolePath = "OU=ROLE_Groups,OU=Groups,OU=_Services," + $DomainDN
+$ACLBeschreibung = "Verzeichnis Team_" + $Gruppenname
+$ACLPath = "OU=ACL_Groups,OU=Groups,OU=_Services," + $DomainDN
+
+#==================================================================================================================================================
+# Erzeugung der Gruppen
+#==================================================================================================================================================
+
+New-ADGroup -Name $Gruppenname_ROLE -SamAccountName $Gruppenname_ROLE -GroupCategory Security -GroupScope Domainlocal -DisplayName $Gruppenname_ROLE -Path $RolePath -Description $RoleBeschreibung 
+New-ADGroup -Name $Gruppenname_M -SamAccountName $Gruppenname_M -GroupCategory Security -GroupScope Domainlocal -DisplayName $Gruppenname_M -Path $ACLPath -Description $ACLBeschreibung 
+New-ADGroup -Name $Gruppenname_R -SamAccountName $Gruppenname_R -GroupCategory Security -GroupScope Domainlocal -DisplayName $Gruppenname_R -Path $ACLPath -Description $ACLBeschreibung 
+
+#==================================================================================================================================================
+# Anpassung der Gruppenzugehörigkeit
+#==================================================================================================================================================
+
+Add-ADGroupMember $Gruppenname_M –Member $Gruppenname_ROLE
+#Add-ADGroupMember ACL_TSProfile –Member $Role
+#Add-ADGroupMember ACL_Home –Member $Role
+#Add-ADGroupMember ACL_TeamShare –Member $Role
+
+#==================================================================================================================================================
+# Verzeichnis erstellen und berechtigen
+#==================================================================================================================================================
+
+#$Fileserver = "\\DC8508\C$\DATA\Team\"
+#$FolderPath = $Fileserver + $Gruppenname
+
+New-Item -ItemType directory -Path $Folderpath
+
+
+
+$aclAE = get-acl $Folderpath
+$arAE = new-object system.security.accesscontrol.filesystemaccessrule($Gruppenname_M,“Modify“, "ContainerInherit, ObjectInherit", "None" , "Allow")
+$aclAE.SetAccessRule($arAE)
+set-acl $Folderpath $aclAE
+#$aclAE = get-acl $Folderpath
+$arAE = new-object system.security.accesscontrol.filesystemaccessrule($Gruppenname_R,“Read“,"Allow")
+$aclAE.SetAccessRule($arAE)
+set-acl $Folderpath $aclAE
+}
